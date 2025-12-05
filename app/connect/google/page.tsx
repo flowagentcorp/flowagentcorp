@@ -14,22 +14,16 @@ export default function ConnectGooglePage() {
       const { data } = await supabaseBrowserClient.auth.getUser();
       const user = data.user;
 
-      if (!user) {
-        console.error("❌ No user session");
-        return router.replace("/login?error=no_session");
-      }
+      if (!user) return router.replace("/login?error=no_session");
 
-      // 2️⃣ Získame agent_id (z agents tabuľky)
+      // 2️⃣ Agent existuje?
       const { data: agent } = await supabaseBrowserClient
         .from("agents")
         .select("*")
         .eq("id", user.id)
         .single();
 
-      if (!agent) {
-        console.error("❌ Agent missing in DB");
-        return router.replace("/login?error=no_agent");
-      }
+      if (!agent) return router.replace("/login?error=no_agent");
 
       setLoading(false);
     };
@@ -38,16 +32,8 @@ export default function ConnectGooglePage() {
   }, [router]);
 
   const handleConnect = async () => {
-    const { data, error } = await supabaseBrowserClient.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        scopes:
-          "email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.labels",
-        redirectTo: `${window.location.origin}/api/oauth/google/callback`,
-      },
-    });
-
-    if (error) console.error(error);
+    // 🔥 Spustíme vlastný Google Workspace OAuth
+    window.location.href = "/api/oauth/google/start";
   };
 
   if (loading) return <div>Checking agent...</div>;
