@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowserClient } from "@/lib/supabaseClient";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const error = searchParams.get("error");
 
   useEffect(() => {
     (async () => {
@@ -25,8 +27,8 @@ export default function LoginPage() {
     });
 
     if (error) {
-      alert("Login failed");
-      console.error(error);
+      console.error("Supabase Google login error:", error.message);
+      alert("Login failed: " + error.message);
     }
   };
 
@@ -35,14 +37,38 @@ export default function LoginPage() {
       style={{
         minHeight: "100vh",
         display: "flex",
-        justifyContent: "center",
         alignItems: "center",
+        justifyContent: "center",
+        background: "#020617",
+        color: "white",
         flexDirection: "column",
         gap: 16,
       }}
     >
-      Sign in to FlowAgent
-      <button onClick={handleLogin}>Continue with Google</button>
+      <h1 style={{ fontSize: 28, fontWeight: 600, marginBottom: 8 }}>
+        Sign in to FlowAgent
+      </h1>
+
+      {error && (
+        <p style={{ color: "#f97373", marginBottom: 8 }}>
+          Login error: {error}
+        </p>
+      )}
+
+      <button
+        onClick={handleLogin}
+        style={{
+          padding: "12px 20px",
+          background: "#2563eb",
+          borderRadius: 999,
+          border: "none",
+          color: "white",
+          cursor: "pointer",
+          fontSize: 16,
+        }}
+      >
+        Continue with Google
+      </button>
     </div>
   );
 }
