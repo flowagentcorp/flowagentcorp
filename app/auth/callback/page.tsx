@@ -9,25 +9,29 @@ export default function AuthCallbackPage() {
 
   useEffect(() => {
     const run = async () => {
-      // 1️⃣ Extract session from URL fragment (#access_token=...)
-      const { data: sessionData, error: sessionError } =
-        await supabaseBrowserClient.auth.getSessionFromUrl({
-          storeSession: true,
-        });
+      try {
+        // 1️⃣ Pokusíme sa vymeniť OAuth "code" za session
+        const { data, error } = await supabaseBrowserClient.auth.exchangeCodeForSession(window.location.href);
 
-      if (sessionError) {
-        console.error("❌ Failed to load session:", sessionError);
-        router.replace("/login?error=no_session");
-        return;
-      }
+        if (error) {
+          console.error("❌ exchangeCodeForSession error:", error);
+          router.replace("/login?error=exchange_failed");
+          return;
+        }
 
-      // 2️⃣ If session exists → continue to Gmail connect page
-      const { data: userData } = await supabaseBrowserClient.auth.getUser();
+        // 2️⃣ Overíme, či máme usera
+        const { data: userData } = await supabaseBrowserClient.auth.getUser();
 
-      if (userData?.user) {
+        if (!userData?.user) {
+          router.replace("/login?error=no_user");
+          return;
+        }
+
+        // 3️⃣ Všetko OK → presmerujeme na connect/google
         router.replace("/connect/google");
-      } else {
-        router.replace("/login?error=no_user");
+      } catch (err) {
+        console.error("❌ unexpected error:", err);
+        router.replace("/login?error=exception");
       }
     };
 
