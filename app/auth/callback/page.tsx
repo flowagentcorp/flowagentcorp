@@ -9,23 +9,37 @@ export default function AuthCallbackPage() {
 
   useEffect(() => {
     const finalize = async () => {
+      // 1️⃣ Parsujeme hash fragment (#access_token=...)
+      const hash = window.location.hash.substring(1);
+      const params = new URLSearchParams(hash);
 
-      // 1️⃣ Supabase uloží session z URL hash (#)
-      const { data, error } = await supabaseBrowserClient.auth.setSessionFromUrl();
+      const access_token = params.get("access_token");
+      const refresh_token = params.get("refresh_token");
+
+      if (!access_token || !refresh_token) {
+        console.error("❌ Tokens missing in callback");
+        return router.replace("/login?error=no_tokens");
+      }
+
+      // 2️⃣ Nastavíme session ručne
+      const { data, error } = await supabaseBrowserClient.auth.setSession({
+        access_token,
+        refresh_token,
+      });
 
       if (error) {
-        console.error("❌ Error saving session:", error);
+        console.error("❌ Error setting session:", error);
         return router.replace("/login?error=session_failed");
       }
 
-      // 2️⃣ Overíme že session existuje
+      // 3️⃣ Overíme session
       const sessionCheck = await supabaseBrowserClient.auth.getSession();
       if (!sessionCheck.data.session) {
-        console.error("❌ Session missing after save");
+        console.error("❌ Session still missing");
         return router.replace("/login?error=no_session");
       }
 
-      // 3️⃣ Presmerovanie späť
+      // 4️⃣ Hotovo → redirect
       router.replace("/connect/google");
     };
 
