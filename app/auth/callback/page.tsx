@@ -10,24 +10,29 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     const run = async () => {
       try {
-        // 1️⃣ Pokusíme sa vymeniť OAuth "code" za session
-        const { data, error } = await supabaseBrowserClient.auth.exchangeCodeForSession(window.location.href);
+        // 1️⃣ Vymeníme OAuth "code" za Supabase session
+        const { data, error } =
+          await supabaseBrowserClient.auth.exchangeCodeForSession(
+            window.location.href
+          );
 
         if (error) {
-          console.error("❌ exchangeCodeForSession error:", error);
-          router.replace("/login?error=exchange_failed");
+          console.error("❌ Error exchanging code for session:", error);
+          router.replace("/login?error=callback");
           return;
         }
 
-        // 2️⃣ Overíme, či máme usera
-        const { data: userData } = await supabaseBrowserClient.auth.getUser();
+        // 2️⃣ Skontrolujeme, či máme usera
+        const { data: userData, error: userError } =
+          await supabaseBrowserClient.auth.getUser();
 
-        if (!userData?.user) {
-          router.replace("/login?error=no_user");
+        if (userError || !userData.user) {
+          console.error("❌ No user after callback:", userError);
+          router.replace("/login?error=no_session");
           return;
         }
 
-        // 3️⃣ Všetko OK → presmerujeme na connect/google
+        // 3️⃣ OK → na connect/google
         router.replace("/connect/google");
       } catch (err) {
         console.error("❌ unexpected error:", err);
@@ -38,5 +43,18 @@ export default function AuthCallbackPage() {
     run();
   }, [router]);
 
-  return <p>Loading...</p>;
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#020617",
+        color: "white",
+      }}
+    >
+      <p>Signing you in…</p>
+    </div>
+  );
 }
