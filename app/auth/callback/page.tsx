@@ -2,57 +2,35 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { supabaseBrowserClient } from "@/lib/supabaseClient";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
 
   useEffect(() => {
     const finalize = async () => {
-      const {
-        data: { session },
-        error,
-      } = await supabase.auth.getSession();
 
-      if (error || !session) {
-        console.error("❌ Session missing:", error);
+      // 1️⃣ Supabase uloží session z URL hash (#)
+      const { data, error } = await supabaseBrowserClient.auth.setSessionFromUrl();
+
+      if (error) {
+        console.error("❌ Error saving session:", error);
+        return router.replace("/login?error=session_failed");
+      }
+
+      // 2️⃣ Overíme že session existuje
+      const sessionCheck = await supabaseBrowserClient.auth.getSession();
+      if (!sessionCheck.data.session) {
+        console.error("❌ Session missing after save");
         return router.replace("/login?error=no_session");
       }
 
-      const user = session.user;
-
-      // ✅ 1. Uložíme/overíme agenta
-      const { data: agent, error: agentError } = await supabase
-        .from("agents")
-        .upsert(
-          {
-            id: user.id,
-            full_name: user.user_metadata?.full_name || "Unknown",
-            email: user.email,
-          },
-          { onConflict: "id" }
-        )
-        .select()
-        .single();
-
-      if (agentError) {
-        console.error("❌ Agent insert failed:", agentError);
-        return router.replace("/login?error=agent_insert");
-      }
-
-      console.log("✅ Agent OK:", agent.id);
-
-      // ✅ 2. Presun na connect/google (tu sa rieši client_credentials)
+      // 3️⃣ Presmerovanie späť
       router.replace("/connect/google");
     };
 
     finalize();
   }, [router]);
 
-  return <div>Finalizing login...</div>;
+  return <div>Finishing login...</div>;
 }
