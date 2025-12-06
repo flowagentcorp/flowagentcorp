@@ -2,27 +2,29 @@ import { google } from "googleapis";
 import { supabase } from "@/lib/supabase";
 import { NextResponse } from "next/server";
 
-// 💥 Toto je kritické → bez toho route NEFUNGUJE
 export const dynamic = "force-dynamic";
 
 export async function POST() {
   try {
-    console.log("📵 Disable Gmail Sync called");
+    console.log("🔌 Disconnect Gmail triggered");
 
-    // 1️⃣ Nájdeme connected Gmail účet
+    // 1️⃣ Nájdeme pripojený Gmail
     const { data: creds, error } = await supabase
       .from("client_credentials")
       .select("*")
       .eq("provider", "google")
-      .neq("email_connected", null)
+      .not("email_connected", "is", null)
       .single();
 
     if (error || !creds) {
-      console.error("No connected Gmail found");
-      return NextResponse.json({ error: "no_connected_email" }, { status: 404 });
+      console.error("❌ No Gmail account connected");
+      return NextResponse.json(
+        { error: "no_connected_gmail" },
+        { status: 400 }
+      );
     }
 
-    // 2️⃣ Google OAuth client
+    // 2️⃣ Setup OAuth client
     const oauth2 = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID!,
       process.env.GOOGLE_CLIENT_SECRET!,
@@ -39,23 +41,26 @@ export async function POST() {
     // 3️⃣ Stop Gmail Watch
     try {
       await gmail.users.stop({ userId: "me" });
-      console.log("📵 Gmail WATCH STOPPED");
-    } catch (stopErr) {
-      console.error("Failed stopping Gmail watch:", stopErr);
+      console.log("📵 Gmail WATCH stopped");
+    } catch (err) {
+      console.error("⚠️ Gmail watch stop error:", err);
     }
 
-    // 4️⃣ Resetujeme credentials v DB
+    // 4️⃣ Reset credentials in DB
     await supabase
       .from("client_credentials")
       .update({
         history_id: null,
         email_connected: null,
+        access_token: null,
+        refresh_token: null,
+        expires_at: null,
       })
       .eq("id", creds.id);
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, message: "gmail_disconnected" });
   } catch (err) {
-    console.error("Disable Gmail Sync ERROR:", err);
-    return NextResponse.json({ error: "failed_to_disable" }, { status: 500 });
+    console.error("❌ Disconnect ERROR:", err);
+    return NextResponse.json({ error: "internal_error" }, { status: 500 });
   }
 }
