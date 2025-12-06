@@ -17,9 +17,65 @@ export default function ConnectGooglePage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [connectedEmail, setConnectedEmail] = useState<string | null>(null);
 
+  // =====================================================================================
+  // ENABLE GMAIL SYNC — POST /api/gmail/watch
+  // =====================================================================================
+  const handleEnableSync = async () => {
+    try {
+      const res = await fetch("/api/gmail/watch", {
+        method: "POST",
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        alert("Failed to enable Gmail sync: " + text);
+        return;
+      }
+
+      alert("🎉 Gmail sync enabled! New emails will now flow into your CRM.");
+    } catch (err) {
+      console.error(err);
+      alert("Unexpected error while enabling sync.");
+    }
+  };
+
+  // =====================================================================================
+  // DISCONNECT — deletes client_credentials row
+  // =====================================================================================
+  const handleDisconnect = async () => {
+    if (!userId) return;
+
+    const { error } = await supabaseBrowserClient
+      .from("client_credentials")
+      .delete()
+      .eq("agent_id", userId)
+      .eq("provider", "google");
+
+    if (error) {
+      console.error("Error disconnecting Gmail:", error);
+      alert("Failed to disconnect Gmail");
+      return;
+    }
+
+    setConnectedEmail(null);
+  };
+
+  // =====================================================================================
+  // CONNECT — redirect into custom OAuth flow
+  // =====================================================================================
+  const handleConnect = () => {
+    if (!userId) return;
+    window.location.href = `/api/oauth/google/start?agent_id=${encodeURIComponent(
+      userId
+    )}`;
+  };
+
+  // =====================================================================================
+  // LOAD USER, AGENT AND CREDS
+  // =====================================================================================
   useEffect(() => {
     const run = async () => {
-      // 1️⃣ Session / user
+      // 1️⃣ Get Supabase session
       const { data: userData, error: userError } =
         await supabaseBrowserClient.auth.getUser();
 
@@ -33,7 +89,7 @@ export default function ConnectGooglePage() {
 
       setUserId(user.id);
 
-      // 2️⃣ Skúsime nájsť agenta
+      // 2️⃣ Try to load agent row
       const { data: agent, error: agentError } = await supabaseBrowserClient
         .from("agents")
         .select("*")
@@ -46,7 +102,7 @@ export default function ConnectGooglePage() {
         return;
       }
 
-      // 3️⃣ Ak agent neexistuje → vytvoríme ho
+      // 3️⃣ If agent doesn't exist → create it
       if (!agent) {
         const fullName =
           (user.user_metadata as any)?.full_name ??
@@ -69,7 +125,7 @@ export default function ConnectGooglePage() {
         }
       }
 
-      // 4️⃣ Skontrolujeme, či už má klient Gmail credentials
+      // 4️⃣ Load Gmail credentials
       const { data: creds, error: credsError } = await supabaseBrowserClient
         .from("client_credentials")
         .select("*")
@@ -89,32 +145,9 @@ export default function ConnectGooglePage() {
     run();
   }, [router]);
 
-  const handleConnect = () => {
-    if (!userId) return;
-    // Spustíme náš vlastný Google OAuth na Gmail
-    window.location.href = `/api/oauth/google/start?agent_id=${encodeURIComponent(
-      userId
-    )}`;
-  };
-
-  const handleDisconnect = async () => {
-    if (!userId) return;
-
-    const { error } = await supabaseBrowserClient
-      .from("client_credentials")
-      .delete()
-      .eq("agent_id", userId)
-      .eq("provider", "google");
-
-    if (error) {
-      console.error("Error disconnecting Gmail:", error);
-      alert("Failed to disconnect Gmail");
-      return;
-    }
-
-    setConnectedEmail(null);
-  };
-
+  // =====================================================================================
+  // LOADING UI
+  // =====================================================================================
   if (loading) {
     return (
       <div
@@ -132,6 +165,9 @@ export default function ConnectGooglePage() {
     );
   }
 
+  // =====================================================================================
+  // MAIN UI
+  // =====================================================================================
   return (
     <div
       style={{
@@ -158,14 +194,35 @@ export default function ConnectGooglePage() {
           Connect your Gmail
         </h1>
         <p style={{ color: "#94a3b8", marginBottom: 16 }}>
-          We use this to read new leads and send smart AI replies.
+          We use this to read new leads automatically and send smart AI replies.
         </p>
 
+        {/* Gmail CONNECTED */}
         {connectedEmail ? (
           <>
             <p style={{ marginBottom: 16 }}>
               ✅ Connected as <strong>{connectedEmail}</strong>
             </p>
+
+            {/* ENABLE SYNC */}
+            <button
+              onClick={handleEnableSync}
+              style={{
+                padding: "10px 16px",
+                background: "#3b82f6",
+                borderRadius: 999,
+                border: "none",
+                color: "white",
+                cursor: "pointer",
+                fontSize: 14,
+                width: "100%",
+                marginBottom: 12,
+              }}
+            >
+              Enable Gmail Sync
+            </button>
+
+            {/* DISCONNECT */}
             <button
               onClick={handleDisconnect}
               style={{
@@ -176,12 +233,14 @@ export default function ConnectGooglePage() {
                 color: "white",
                 cursor: "pointer",
                 fontSize: 14,
+                width: "100%",
               }}
             >
               Disconnect Gmail
             </button>
           </>
         ) : (
+          /* Gmail NOT CONNECTED */
           <button
             onClick={handleConnect}
             style={{
