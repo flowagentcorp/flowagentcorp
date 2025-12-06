@@ -20,31 +20,40 @@ export default function ConnectGooglePage() {
   // =====================================================================================
   // ENABLE GMAIL SYNC — POST /api/gmail/watch
   // =====================================================================================
-  const handleEnableSync = async () => {
-    if (!userId) {
-      alert("Missing agent id. Please refresh and try again.");
+const handleEnableSync = async () => {
+  try {
+    // 👉 Získame session (access token)
+    const { data } = await supabaseBrowserClient.auth.getSession();
+    const accessToken = data.session?.access_token;
+
+    if (!accessToken) {
+      alert("No session found. Please log in again.");
       return;
     }
 
-    try {
-      const res = await fetch("/api/gmail/watch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agent_id: userId }),
-      });
+    const res = await fetch("/api/gmail/watch", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${accessToken}`, // 🔥 TOTO JE DÔLEŽITÉ
+      },
+      body: JSON.stringify({}),
+    });
 
-      if (!res.ok) {
-        const text = await res.text();
-        alert("Failed to enable Gmail sync: " + text);
-        return;
-      }
+    const out = await res.json();
 
-      alert("🎉 Gmail sync enabled! New emails will now flow into your CRM.");
-    } catch (err) {
-      console.error(err);
-      alert("Unexpected error while enabling sync.");
+    if (!res.ok) {
+      alert("Failed to enable Gmail sync: " + JSON.stringify(out));
+      return;
     }
-  };
+
+    alert("🎉 Gmail sync is now ENABLED!");
+  } catch (err) {
+    console.error(err);
+    alert("Unexpected error enabling sync.");
+  }
+};
+
 
   // =====================================================================================
   // DISCONNECT — deletes client_credentials row
