@@ -21,9 +21,16 @@ export default function ConnectGooglePage() {
   // ENABLE GMAIL SYNC — POST /api/gmail/watch
   // =====================================================================================
   const handleEnableSync = async () => {
+    if (!userId) {
+      alert("Missing agent id. Please refresh and try again.");
+      return;
+    }
+
     try {
       const res = await fetch("/api/gmail/watch", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agent_id: userId }),
       });
 
       if (!res.ok) {
@@ -61,7 +68,7 @@ export default function ConnectGooglePage() {
   };
 
   // =====================================================================================
-  // CONNECT — redirect into custom OAuth flow
+  // CONNECT — redirect to /api/oauth/google/start?agent_id=...
   // =====================================================================================
   const handleConnect = () => {
     if (!userId) return;
@@ -177,85 +184,142 @@ export default function ConnectGooglePage() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        padding: 24,
+        fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
       }}
     >
       <div
         style={{
-          background: "#0f172a",
-          padding: 24,
+          background: "#020617",
           borderRadius: 16,
-          maxWidth: 480,
-          width: "100%",
           border: "1px solid #1e293b",
+          padding: 24,
+          maxWidth: 420,
+          width: "100%",
+          boxShadow: "0 20px 40px rgba(15,23,42,0.8)",
         }}
       >
-        <h1 style={{ fontSize: 24, fontWeight: 600, marginBottom: 12 }}>
-          Connect your Gmail
-        </h1>
-        <p style={{ color: "#94a3b8", marginBottom: 16 }}>
-          We use this to read new leads automatically and send smart AI replies.
-        </p>
+        <div style={{ marginBottom: 16 }}>
+          <h1 style={{ fontSize: 24, marginBottom: 8 }}>Connect your Gmail</h1>
+          <p style={{ fontSize: 14, color: "#9ca3af" }}>
+            We&apos;ll sync new inquiries into your CRM and let the AI respond.
+          </p>
+        </div>
 
-        {/* Gmail CONNECTED */}
-        {connectedEmail ? (
-          <>
-            <p style={{ marginBottom: 16 }}>
-              ✅ Connected as <strong>{connectedEmail}</strong>
-            </p>
+        <div
+          style={{
+            padding: 16,
+            borderRadius: 12,
+            background: "#020617",
+            border: "1px solid #1e293b",
+            marginBottom: 16,
+          }}
+        >
+          <p style={{ fontSize: 13, color: "#9ca3af", marginBottom: 8 }}>
+            Status
+          </p>
+          <p style={{ fontSize: 14 }}>
+            {connectedEmail ? (
+              <>
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      background: "#22c55e",
+                    }}
+                  />
+                  <span>Connected as {connectedEmail}</span>
+                </span>
+              </>
+            ) : (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  color: "#f97316",
+                }}
+              >
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    background: "#f97316",
+                  }}
+                />
+                <span>Not connected</span>
+              </span>
+            )}
+          </p>
+        </div>
 
-            {/* ENABLE SYNC */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {connectedEmail ? (
+            <>
+              <p style={{ marginBottom: 8 }}>
+                ✅ Connected as <strong>{connectedEmail}</strong>
+              </p>
+
+              {/* ENABLE SYNC */}
+              <button
+                onClick={handleEnableSync}
+                style={{
+                  padding: "10px 16px",
+                  background: "#3b82f6",
+                  borderRadius: 999,
+                  border: "none",
+                  color: "white",
+                  cursor: "pointer",
+                  fontSize: 14,
+                  width: "100%",
+                }}
+              >
+                Enable Gmail Sync
+              </button>
+
+              {/* DISCONNECT */}
+              <button
+                onClick={handleDisconnect}
+                style={{
+                  padding: "10px 16px",
+                  background: "#ef4444",
+                  borderRadius: 999,
+                  border: "none",
+                  color: "white",
+                  cursor: "pointer",
+                  fontSize: 14,
+                  width: "100%",
+                }}
+              >
+                Disconnect Gmail
+              </button>
+            </>
+          ) : (
+            /* Gmail NOT CONNECTED */
             <button
-              onClick={handleEnableSync}
+              onClick={handleConnect}
               style={{
                 padding: "10px 16px",
-                background: "#3b82f6",
+                background: "#22c55e",
                 borderRadius: 999,
                 border: "none",
                 color: "white",
                 cursor: "pointer",
                 fontSize: 14,
-                width: "100%",
-                marginBottom: 12,
               }}
             >
-              Enable Gmail Sync
+              Connect Google
             </button>
-
-            {/* DISCONNECT */}
-            <button
-              onClick={handleDisconnect}
-              style={{
-                padding: "10px 16px",
-                background: "#ef4444",
-                borderRadius: 999,
-                border: "none",
-                color: "white",
-                cursor: "pointer",
-                fontSize: 14,
-                width: "100%",
-              }}
-            >
-              Disconnect Gmail
-            </button>
-          </>
-        ) : (
-          /* Gmail NOT CONNECTED */
-          <button
-            onClick={handleConnect}
-            style={{
-              padding: "10px 16px",
-              background: "#22c55e",
-              borderRadius: 999,
-              border: "none",
-              color: "white",
-              cursor: "pointer",
-              fontSize: 14,
-            }}
-          >
-            Connect Google
-          </button>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
