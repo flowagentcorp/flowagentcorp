@@ -2,9 +2,14 @@ import { google } from "googleapis";
 import { supabase } from "@/lib/supabase";
 import { NextResponse } from "next/server";
 
+// 💥 Toto je kritické → bez toho route NEFUNGUJE
+export const dynamic = "force-dynamic";
+
 export async function POST() {
   try {
-    // 1️⃣ Nájdeme credentials podľa email_connected
+    console.log("📵 Disable Gmail Sync called");
+
+    // 1️⃣ Nájdeme connected Gmail účet
     const { data: creds, error } = await supabase
       .from("client_credentials")
       .select("*")
@@ -17,7 +22,7 @@ export async function POST() {
       return NextResponse.json({ error: "no_connected_email" }, { status: 404 });
     }
 
-    // 2️⃣ Získame OAuth client
+    // 2️⃣ Google OAuth client
     const oauth2 = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID!,
       process.env.GOOGLE_CLIENT_SECRET!,
@@ -31,7 +36,7 @@ export async function POST() {
 
     const gmail = google.gmail({ version: "v1", auth: oauth2 });
 
-    // 3️⃣ STOP Gmail Watch
+    // 3️⃣ Stop Gmail Watch
     try {
       await gmail.users.stop({ userId: "me" });
       console.log("📵 Gmail WATCH STOPPED");
@@ -39,7 +44,7 @@ export async function POST() {
       console.error("Failed stopping Gmail watch:", stopErr);
     }
 
-    // 4️⃣ Reset credentials
+    // 4️⃣ Resetujeme credentials v DB
     await supabase
       .from("client_credentials")
       .update({
