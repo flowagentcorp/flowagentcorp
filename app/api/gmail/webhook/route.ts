@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";            // FIXNUTÁ CESTA
+import { supabase } from "@/lib/supabase";
 import { google } from "googleapis";
 
-// ====== 1. Typy ======
+// ====== TYPES ======
 interface GmailPushMessage {
   emailAddress: string;
   historyId: string;
@@ -13,21 +13,22 @@ interface CredentialRow {
   access_token: string;
   refresh_token: string;
   expires_at: string;
+  email: string;
 }
 
-// ====== 2. POST handler ======
+// ====== MAIN POST HANDLER ======
 export async function POST(req: Request) {
   try {
     const raw = await req.text();
 
-    // Google validation ping
+    // Google validation challenge
     if (raw.includes("validationToken")) {
       return new NextResponse(JSON.stringify({ ok: true }), { status: 200 });
     }
 
     const pubsubBody = JSON.parse(raw);
-
     const messageData = pubsubBody?.message?.data;
+
     if (!messageData) {
       console.error("❌ No PubSub message.data");
       return NextResponse.json({ error: "no_data" }, { status: 200 });
@@ -39,13 +40,13 @@ export async function POST(req: Request) {
 
     console.log("🔔 Gmail PUSH:", decoded);
 
-    const userEmail = decoded.emailAddress;
+    const gmailEmail = decoded.emailAddress;
     const historyId = decoded.historyId;
 
-    // 1️⃣ Find agent credentials via JOIN
-    const credentials = await getCredentialsByAgentEmail(userEmail);
+    // 1️⃣ Load correct Gmail credentials
+    const credentials = await getCredentialsByAgentEmail(gmailEmail);
 
-    // 2️⃣ Refresh token if needed
+    // 2️⃣ Refresh token if expired
     const accessToken = await refreshIfNeeded(credentials);
 
     // 3️⃣ Call message fetcher
@@ -56,7 +57,7 @@ export async function POST(req: Request) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           agent_id: credentials.agent_id,
-          email: userEmail,
+          email: gmailEmail,
           access_token: accessToken,
           historyId,
         }),
@@ -73,7 +74,7 @@ export async function POST(req: Request) {
   }
 }
 
-// ====== 3. Load credentials based on agent email ======
+// ====== 1. LOAD CREDENTIALS PROPERLY ======
 async function getCredentialsByAgentEmail(email: string): Promise<CredentialRow> {
   const { data, error } = await supabase
     .from("client_credentials")
@@ -83,22 +84,22 @@ async function getCredentialsByAgentEmail(email: string): Promise<CredentialRow>
       access_token,
       refresh_token,
       expires_at,
-      agents!inner (email)
+      email
     `
     )
     .eq("provider", "google")
-    .eq("agents.email", email)
+    .eq("email", email) // ⚡ FIX – lookup by Gmail OAuth email
     .maybeSingle();
 
   if (error || !data) {
-    console.error("❌ Credentials not found for email:", email, error);
+    console.error("❌ Credentials not found for Gmail email:", email, error);
     throw new Error("credentials_not_found");
   }
 
   return data as CredentialRow;
 }
 
-// ====== 4. Refresh if expired ======
+// ====== 2. REFRESH TOKEN WHEN NEEDED ======
 async function refreshIfNeeded(credentials: CredentialRow): Promise<string> {
   const expiresAt = new Date(credentials.expires_at).getTime();
   const now = Date.now();
@@ -126,7 +127,8 @@ async function refreshIfNeeded(credentials: CredentialRow): Promise<string> {
         expires_at: new Date(Date.now() + updated.expiry_date!).toISOString(),
       })
       .eq("agent_id", credentials.agent_id)
-      .eq("provider", "google");
+      .eq("provider", "google")
+      .eq("email", credentials.email);
 
     return updated.access_token!;
   }
