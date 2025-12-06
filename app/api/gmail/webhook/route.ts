@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { supabase } from "../../../lib/supabase";
+import { supabase } from "@/lib/supabase";            // FIXNUTÁ CESTA
 import { google } from "googleapis";
 
 // ====== 1. Typy ======
-
 interface GmailPushMessage {
   emailAddress: string;
   historyId: string;
@@ -16,42 +15,40 @@ interface CredentialRow {
   expires_at: string;
 }
 
-// ====== 2. Hlavný handler ======
-
+// ====== 2. POST handler ======
 export async function POST(req: Request) {
   try {
     const raw = await req.text();
 
-    // Pub/Sub validation ping
+    // Google validation ping
     if (raw.includes("validationToken")) {
       return new NextResponse(JSON.stringify({ ok: true }), { status: 200 });
     }
 
     const pubsubBody = JSON.parse(raw);
 
-    // Gmail Pub/Sub messages sú base64 encoded
     const messageData = pubsubBody?.message?.data;
     if (!messageData) {
-      console.error("No PubSub message data!");
+      console.error("❌ No PubSub message.data");
       return NextResponse.json({ error: "no_data" }, { status: 200 });
     }
 
-    const decoded = JSON.parse(Buffer.from(messageData, "base64").toString()) as GmailPushMessage;
+    const decoded = JSON.parse(
+      Buffer.from(messageData, "base64").toString()
+    ) as GmailPushMessage;
 
-    console.log("🔔 Gmail PUSH event:", decoded);
+    console.log("🔔 Gmail PUSH:", decoded);
 
     const userEmail = decoded.emailAddress;
     const historyId = decoded.historyId;
 
-    // 1️⃣ Nájdeme správne credentials – cez JOIN na agents table
+    // 1️⃣ Find agent credentials via JOIN
     const credentials = await getCredentialsByAgentEmail(userEmail);
 
-    console.log("Found credentials:", credentials);
-
-    // 2️⃣ Refresh token ak expiroval
+    // 2️⃣ Refresh token if needed
     const accessToken = await refreshIfNeeded(credentials);
 
-    // 3️⃣ Derivuj message zo Gmailu cez tvoju vlastnú fetch route
+    // 3️⃣ Call message fetcher
     const res = await fetch(
       `${process.env.NEXT_PUBLIC_BASE_URL}/api/gmail/fetch-message`,
       {
@@ -67,48 +64,47 @@ export async function POST(req: Request) {
     );
 
     const result = await res.json();
-    console.log("Fetch-message result:", result);
+    console.log("📩 Fetch-message result:", result);
 
     return NextResponse.json({ ok: true });
   } catch (e: any) {
-    console.error("Webhook ERROR:", e);
+    console.error("❌ Webhook ERROR:", e);
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
 
-// ====== 3. Funkcia: nájdi credentials podľa emailu užívateľa ======
-
+// ====== 3. Load credentials based on agent email ======
 async function getCredentialsByAgentEmail(email: string): Promise<CredentialRow> {
   const { data, error } = await supabase
     .from("client_credentials")
-    .select(`
+    .select(
+      `
       agent_id,
       access_token,
       refresh_token,
       expires_at,
       agents!inner (email)
-    `)
+    `
+    )
     .eq("provider", "google")
     .eq("agents.email", email)
     .maybeSingle();
 
   if (error || !data) {
-    console.error("No credentials for email:", email, error);
+    console.error("❌ Credentials not found for email:", email, error);
     throw new Error("credentials_not_found");
   }
 
   return data as CredentialRow;
 }
 
-// ====== 4. Refresh token ak treba ======
-
+// ====== 4. Refresh if expired ======
 async function refreshIfNeeded(credentials: CredentialRow): Promise<string> {
   const expiresAt = new Date(credentials.expires_at).getTime();
   const now = Date.now();
 
-  // token expiroval — refreshujeme
   if (now >= expiresAt - 60_000) {
-    console.log("Refreshing Google token...");
+    console.log("♻️ Refreshing Google token...");
 
     const oauth2 = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID!,
@@ -120,10 +116,9 @@ async function refreshIfNeeded(credentials: CredentialRow): Promise<string> {
       refresh_token: credentials.refresh_token,
     });
 
-    const newTokens = await oauth2.refreshAccessToken();
-    const updated = newTokens.credentials;
+    const refreshed = await oauth2.refreshAccessToken();
+    const updated = refreshed.credentials;
 
-    // uložiť späť do databázy
     await supabase
       .from("client_credentials")
       .update({
@@ -136,6 +131,5 @@ async function refreshIfNeeded(credentials: CredentialRow): Promise<string> {
     return updated.access_token!;
   }
 
-  // netreba refresh
   return credentials.access_token;
 }
